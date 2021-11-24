@@ -1,9 +1,9 @@
 ---
 title: "Creators Statistical Analysis"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
   html_notebook: default
   author: Andreas Felderer
 ---
@@ -49,15 +49,19 @@ read.csv("creators_data_perception.csv",
 ## Main and Supplementary Study
 Values in the Paper:
 
-# :TODO: Participants 210 in main study and 90 in supplementary study (page 6)
+# :TODO: 1 In the paper the number of participants is reported as 210 in main study and 90 in supplementary study (page 6)
   - Session duration: 105 min -> Not available in the data
   - Average earnings: 60 USD 
+  
 ```{r earnings}
 df %>% 
   summarise(Mean_Earnings = round(mean(Payoff.Fee), 0))
 ```
-# :TODO: Review the statement can be interpreted in two ways
-  - Mean earnings % of budget: 10%
+
+# :TODO: 2 The following statement it can be interpreted in two ways (page 6)
+"users earn on average more than 10 % of their monthly budget net of rent"
+    1. The mean of (earning in percent of the monthly budget)
+    2. The (mean of the earning) in percent of (the mean of the monthly budget)
 ```{r}
 df %>% 
   filter(monthly_budget != 0) %>% 
@@ -122,9 +126,10 @@ wilcox_test(monthly_budget~Treat, data = df,
 
 ## Calibration Study
 
-  - Mean earning: 34 USD
+  - Mean earning: 34.70 USD
   
-# :TODO: Review there is some inconsistency
+# :TODO: 3 There is a small inconsitency with the value reported in the paper (page 10 Footnote 10)
+
 ```{r payoff_cal}
 df_cal %>% 
   summarise(Mean_Earnings = round(mean(Payoff.Fee, na.rm = T), 2))
@@ -299,7 +304,7 @@ df_decision_long_stripped %>%
               comparisons = list(c("Nonrival", "Rival Main")))
 ```
 
-# :TODO: Which adjustment methods where used ?
+# :TODO: 4 Which adjustment methods where used? not all here produce 1 as reported in the paper (page 18)
 ```{r wilcoxon_all_rounds}
 for (adj_method in c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr")){
   print(paste("Method: ", adj_method))
@@ -317,13 +322,13 @@ for (adj_method in c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fd
 }
 ```
 
-# :TODO: Do I have to do a Bayesian Factor Analysis?
+# :TODO: 5 Bayesian Factor Analysis
 
-# :TODO: Do I have to compute the power of the study?
+# :TODO: 6 Power of the study
 
 ## Figure 5 (Behavior rival vs. non-rival)
 
-# :TODO: Do I have to add the Number of observations?
+# :TODO: 7 In case you want to uses these figures I have to add the number of observations 
 ```{r fig.dim=c(8,10), message=FALSE, warning=FALSE}
 df_decision_long_stripped %>% 
   pivot_wider(names_from = decision_round, 
@@ -698,7 +703,7 @@ ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
 
 User keep: 1.39 
 
-# :TODO: I get different values
+# :TODO: 8 I get different values (page 22)
 
 ```{r}
 df %>% 
@@ -714,7 +719,7 @@ df %>%
 ```
 Percent of users who share: 77%
 
-# :TODO: I get a different value
+# :TODO: 9 I get a different value (page 22)
 
 ```{r}
 df %>% 
@@ -807,7 +812,7 @@ rows <- tribble(~term,             ~first,  ~sec, ~th,
     as.character(round(models_lr[["(3)"]]$df.residual,3)) ,")" ))
 ```
 
-# :TODO: I get a different coefficient for Law the rest is equal
+# :TODO: 10 I get a different coefficient for Law the rest is equal (page 34)
 ```{r}
 modelsummary(
   models_lr, 

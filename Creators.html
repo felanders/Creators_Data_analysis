@@ -212,8 +212,8 @@ read.csv(&quot;creators_data_perception.csv&quot;,
 <p>Values in the Paper:</p>
 </div>
 </div>
-<div id="todo-participants-210-in-main-study-and-90-in-supplementary-study-page-6" class="section level1">
-<h1>:TODO: Participants 210 in main study and 90 in supplementary study (page 6)</h1>
+<div id="todo-1-in-the-paper-the-number-of-participants-is-reported-as-210-in-main-study-and-90-in-supplementary-study-page-6" class="section level1">
+<h1>:TODO: 1 In the paper the number of participants is reported as 210 in main study and 90 in supplementary study (page 6)</h1>
 <ul>
 <li>Session duration: 105 min -&gt; Not available in the data</li>
 <li>Average earnings: 60 USD</li>
@@ -226,11 +226,9 @@ read.csv(&quot;creators_data_perception.csv&quot;,
   </script>
 </div>
 </div>
-<div id="todo-review-the-statement-can-be-interpreted-in-two-ways" class="section level1">
-<h1>:TODO: Review the statement can be interpreted in two ways</h1>
-<ul>
-<li>Mean earnings % of budget: 10%</li>
-</ul>
+<div id="todo-2-the-following-statement-it-can-be-interpreted-in-two-ways-page-6" class="section level1">
+<h1>:TODO: 2 The following statement it can be interpreted in two ways (page 6)</h1>
+<p>“users earn on average more than 10 % of their monthly budget net of rent” 1. The mean of (earning in percent of the monthly budget) 2. The (mean of the earning) in percent of (the mean of the monthly budget)</p>
 <pre class="r"><code>df %&gt;% 
   filter(monthly_budget != 0) %&gt;% 
   mutate(earnings_perc = Payoff.Fee/monthly_budget*100) %&gt;% 
@@ -319,12 +317,12 @@ read.csv(&quot;creators_data_perception.csv&quot;,
 <div id="calibration-study" class="section level2">
 <h2>Calibration Study</h2>
 <ul>
-<li>Mean earning: 34 USD</li>
+<li>Mean earning: 34.70 USD</li>
 </ul>
 </div>
 </div>
-<div id="todo-review-there-is-some-inconsistency" class="section level1">
-<h1>:TODO: Review there is some inconsistency</h1>
+<div id="todo-3-there-is-a-small-inconsitency-with-the-value-reported-in-the-paper-page-10-footnote-10" class="section level1">
+<h1>:TODO: 3 There is a small inconsitency with the value reported in the paper (page 10 Footnote 10)</h1>
 <pre class="r"><code>df_cal %&gt;% 
   summarise(Mean_Earnings = round(mean(Payoff.Fee, na.rm = T), 2))</code></pre>
 <div data-pagedtable="false">
@@ -546,8 +544,8 @@ ggplot() +
 </div>
 </div>
 </div>
-<div id="todo-which-adjustment-methods-where-used" class="section level1">
-<h1>:TODO: Which adjustment methods where used ?</h1>
+<div id="todo-4-which-adjustment-methods-where-used-not-all-here-produce-1-as-reported-in-the-paper-page-18" class="section level1">
+<h1>:TODO: 4 Which adjustment methods where used? not all here produce 1 as reported in the paper (page 18)</h1>
 <pre class="r"><code>for (adj_method in c(&quot;holm&quot;, &quot;hochberg&quot;, &quot;hommel&quot;, &quot;bonferroni&quot;, &quot;BH&quot;, &quot;BY&quot;, &quot;fdr&quot;)){
   print(paste(&quot;Method: &quot;, adj_method))
   print(
@@ -661,17 +659,17 @@ ggplot() +
 ##  9     9 0.517
 ## 10    10 0.544</code></pre>
 </div>
-<div id="todo-do-i-have-to-do-a-bayesian-factor-analysis" class="section level1">
-<h1>:TODO: Do I have to do a Bayesian Factor Analysis?</h1>
+<div id="todo-5-bayesian-factor-analysis" class="section level1">
+<h1>:TODO: 5 Bayesian Factor Analysis</h1>
 </div>
-<div id="todo-do-i-have-to-compute-the-power-of-the-study" class="section level1">
-<h1>:TODO: Do I have to compute the power of the study?</h1>
+<div id="todo-6-power-of-the-study" class="section level1">
+<h1>:TODO: 6 Power of the study</h1>
 <div id="figure-5-behavior-rival-vs.-non-rival" class="section level2">
 <h2>Figure 5 (Behavior rival vs. non-rival)</h2>
 </div>
 </div>
-<div id="todo-do-i-have-to-add-the-number-of-observations" class="section level1">
-<h1>:TODO: Do I have to add the Number of observations?</h1>
+<div id="todo-7-in-case-you-want-to-uses-these-figures-i-have-to-add-the-number-of-observations" class="section level1">
+<h1>:TODO: 7 In case you want to uses these figures I have to add the number of observations</h1>
 <pre class="r"><code>df_decision_long_stripped %&gt;% 
   pivot_wider(names_from = decision_round, 
               values_from = decision_round, 
@@ -1060,8 +1058,8 @@ ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
 <h1>Dictator Game</h1>
 <p>User keep: 1.39</p>
 </div>
-<div id="todo-i-get-different-values" class="section level1">
-<h1>:TODO: I get different values</h1>
+<div id="todo-8-i-get-different-values-page-22" class="section level1">
+<h1>:TODO: 8 I get different values (page 22)</h1>
 <pre class="r"><code>df %&gt;% 
   summarise(Mean_keep = mean(dictator_kept), 
             Percent_keep = mean(dictator_kept)/2 ) %&gt;% 
@@ -1083,8 +1081,8 @@ ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
 </div>
 <p>Percent of users who share: 77%</p>
 </div>
-<div id="todo-i-get-a-different-value" class="section level1">
-<h1>:TODO: I get a different value</h1>
+<div id="todo-9-i-get-a-different-value-page-22" class="section level1">
+<h1>:TODO: 9 I get a different value (page 22)</h1>
 <pre class="r"><code>df %&gt;% 
   mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %&gt;% 
   summarise(Percent_give_smtn = mean(Dictator_give_smtn))</code></pre>
@@ -1176,8 +1174,8 @@ rows &lt;- tribble(~term,             ~first,  ~sec, ~th,
     as.character(round(models_lr[[&quot;(3)&quot;]]$df.residual,3)) ,&quot;)&quot; ))</code></pre>
 </div>
 </div>
-<div id="todo-i-get-a-different-coefficient-for-law-the-rest-is-equal" class="section level1">
-<h1>:TODO: I get a different coefficient for Law the rest is equal</h1>
+<div id="todo-10-i-get-a-different-coefficient-for-law-the-rest-is-equal-page-34" class="section level1">
+<h1>:TODO: 10 I get a different coefficient for Law the rest is equal (page 34)</h1>
 <pre class="r"><code>modelsummary(
   models_lr, 
   fmt = 3,
