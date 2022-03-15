@@ -1,18 +1,29 @@
 ---
 title: "Creators Statistical Analysis"
+author: "Andreas Felderer"
 output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
   bookdown::html_document2:
-    toc: true
+    toc: yes
     toc_depth: 2
-    toc_float: true
-    number_sections: true
-    dev: 'svg'
+    toc_float: yes
+    number_sections: yes
+    dev: svg
     df_print: paged
     theme: paper
     css: style.css
-  author: Andreas Felderer
-editor_options: 
-  markdown: 
+  pdf: default
+  pdf_document:
+    toc: yes
+    latex_engine: xelatex
+    df_print: paged
+    includes:
+      in_header: preamble.tex
+editor_options:
+  markdown:
     wrap: 72
 ---
 
@@ -662,7 +673,7 @@ ggplot(aes(x=Treat, y=Decision_dummy, fill=Decision)) +
        y= "Fraction of Users")
 ```
 
-## Table (A1 and B2)
+## Table A1
 
 ```{r table, message=FALSE, warning=FALSE}
 ci <- function(x, n){
@@ -696,26 +707,31 @@ df_decision_long_stripped %>%
   select(round, A, B, C, N) -> df_table
 ```
 
-```{r print_table}
+```{r print_table_a1}
 df_table %>% 
-  filter(Treat == "Rival Treatment") -> df_table_combined
-
-df_table %>% 
-  filter(Treat == "Nonrival Treatment") %>% 
-  left_join(df_table_combined, by = c("round")) -> df_table_combined
-
-df_table %>% 
-  filter(Treat == "Supplementary Treatment") %>% 
-  left_join(df_table_combined, by = c("round")) -> df_table_combined
-
-df_table_combined %>% 
+  filter(Treat == "Rival Treatment") %>%
+  left_join(df_table %>% filter(Treat == "Nonrival Treatment"), by = c("round")) %>% 
   ungroup() %>% 
-  select(round, A, B, C, N, A.x, B.x, C.x, N.x, A.y, B.y, C.y, N.y) %>% 
-  kable(col.names=c("Round", "A (Do. N)","B (Buy)","C (Submit)", "N", "A (Do. N)","B (Buy)","C (Submit)", "N", "A (Do. N)","B (Buy)","C (Submit)", "N")) %>% 
-  add_header_above(c(" " = 1, "Supplementary" = 4, "Nonrival" = 4, "Rival" = 4)) %>% 
-  add_header_above(c(" " = 1, "Treatment" = 12)) %>% 
+  select(round, A.x, B.x, C.x, N.x, A.y, B.y, C.y, N.y) %>% 
+  kable(col.names=c("Round", "A (Do. N)","B (Buy)","C (Submit)", "N", "A (Do. N)","B (Buy)","C (Submit)", "N")) %>% 
+  add_header_above(c(" " = 1, "Rival" = 4, "Nonrival" = 4)) %>% 
+  add_header_above(c(" " = 1, "Treatment" = 8)) %>% 
   kable_material(c("striped", "hover"))
 ```
+
+## Table B2
+```{r print_table_b2}
+df_table %>% 
+  filter(Treat == "Supplementary Treatment") %>%
+  left_join(df_table %>% filter(Treat == "Nonrival Treatment"), by = c("round")) %>% 
+  ungroup() %>% 
+  select(round, A.x, B.x, C.x, N.x, A.y, B.y, C.y, N.y) %>% 
+  kable(col.names=c("Round", "A (Do. N)","B (Buy)","C (Submit)", "N", "A (Do. N)","B (Buy)","C (Submit)", "N")) %>% 
+  add_header_above(c(" " = 1, "Supplementary" = 4, "Nonrival" = 4)) %>% 
+  add_header_above(c(" " = 1, "Treatment" = 8)) %>% 
+  kable_material(c("striped", "hover"))
+```
+
 
 ## Figure B.1 (Behavior supplementary vs. non-rival)
 
@@ -1013,7 +1029,7 @@ modelsummary(
   gof_map = gm_map,
   add_rows = rows,
   conf_level = .95) %>% add_header_above(c(" " = 1, "Submit" = 3),) %>% 
-  add_header_above(c(" " = 1, "Dependent variable:" = 3), bold = T, italic = T) 
+  add_header_above(c(" " = 1, "Dependent variable:" = 3), bold = T, italic = T)
 ```
 
 ### Logistic Regression
@@ -1051,7 +1067,7 @@ modelsummary(
   coef_map = append(coef_map, c("")),
   estimate = "{estimate} ({std.error}){stars}",
   statistic = NULL,
-   notes = "+ p < 0.1, * p < 0.05, ** p < 0.01, *** p < 0.001",
+  notes = "+ p < 0.1, * p < 0.05, ** p < 0.01, *** p < 0.001",
   gof_map = gm_map_logit,
   vcov = ~participant,
   conf_level = .95) %>% add_header_above(c(" " = 1, "Submit" = 3),) %>% 
