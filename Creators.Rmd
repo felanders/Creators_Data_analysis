@@ -1,26 +1,179 @@
 ---
 title: "Creators Statistical Analysis"
 output:
-  pdf_document: default
-  html_document:
+  bookdown::html_document2:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: true
+    dev: 'svg'
     df_print: paged
-  html_notebook: default
+    theme: paper
+    css: style.css
   author: Andreas Felderer
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
-# Libraries
-```{r message=FALSE, warning=FALSE}
+```{r setup, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = F, collapse = T, cache = T, comment = "", warning =  F)
+```
+
+# Remarks
+
+## Adjustment for Multiple Testing
+
+Page 18 (New version):
+
+> "(p = 1, in all ten rounds), independent of the method used to adjust
+> for multiple hypothesis testing."
+
+I cannot exactly reproduce this statement:
+
+-   I only get p = 1, in all ten rounds for the methods: "holm",
+    "bonferroni", "BY"
+
+-   However, I do not get p = 1, in all ten rounds for the methods:
+    "hochberg", "hommel", "fdr"
+
+In the original Analysis the values where rounded, this is where I
+believe the discrepancy originates from. In \@ref(mult-test) you find
+the values for all methods. There it can be seen that when adjusting the
+values are above 0.5 i.e. they round to 1
+
+Finally, adjusting for multiple testing does not make too much sens in
+this case in the first place in my opinion.
+
+-   You want to adjust for multiple testing to show that even with
+    multiple testing your results are still significant.
+
+-   Here the statement is that the results are not significant and they
+    are not significant (smalles p value is 0.133 in round 6) even
+    without adjusting for multiple testing which is a more precise
+    statement in my opinion.
+
+My recommendation would be to state that non of the rounds show a
+significant result with the smallest p value being 0.133.
+
+## Bayes Factors
+
+In the Paper you write about Bayesian Factor Analysis. In my
+understanding a Bayesian Factor Analysis is the Bayesian version of
+Factor analysis. What is computed here are Bayesian factors in favor of
+the null hypothesis.
+
+My recommendation would be to change the language to something on the
+lines of:
+
+> "We computed the Bayesian Factors in favor of the null hypothesis
+> based on the contingency tables for choice C (Submit) vs. the rest for
+> all rounds"
+
+Additionally there is a typo on page 49 (New Version) concerning the
+calibration study:
+
+-   Round 3 is mentioned twice and round 5 is not mentioned at all
+
+## Summary Statistics
+
+I could not reproduce some values for certain summary statistics.
+
+Unfortunately some of these values where not computed in the original
+analysis which I could have a look at, which is why I could not better
+understand the discrepancy.
+
+### Earnings in the Calibration Study
+
+Footnote on Page 11 (New Version):
+
+I cannot reproduce the value of 34.7 USD (no dramatic deviation)
+
+-   I find 34.9
+
+-   Also trying different ways to compute the value does not lead to
+    34.7 (see \@ref(payoff-cal))
+
+### Dictator Game
+
+I get different values from page 21 (New Version).
+
+Reported values are:
+
+-   User keep: 1.39
+
+-   Percent of users who share: 77%
+
+My analysis is here: \@ref(dict-game), and I tried different subsets to
+reproduce the values without success here \@ref(dict-share-understand).
+
+### Share of Stealing
+
+-   Reported Value is 67%
+
+> On average, users in study 1 claim to find the solution 67 % of the
+> time, while participants in the calibration study actually find the
+> solution 32 % of the time. Hence, an estimated 35 % of all users steal
+> in a given round or, in other words, about half of all solutions users
+> claim to have found independently are stolen from the owner.
+
+-   I find 68% (see \@ref(stat-steal))
+
+-   Looking at the original analysis i found that it was computing the
+    mean of the means per round which returns 66.6% which rounds to 67%
+
+I would recommend report a value of 68%.
+
+### Typos
+
+I simply because I spotted them and wanted to note them down.
+
+Page 6 (New Version):
+
+-   missing space in "[...] from138 different [...]"
+
+-   two periods in "[...] participants was examined.. In study 1, [...]"
+
+## Power Analysis
+
+This is more to make sure I understand the following sentence correctly:
+
+> "Given our sample size, a treatment effect of 30 percentage points and
+> a target significance level of 5%, the power of our setup is 80%."
+
+At the first reading I interpreted this as with our setup the power is
+80%, while the power of the setup (N 60 and 45) is greater than 80%.
+
+I came to understand that this means: with our setup (N 60 and 45,
+significance level of 5%) we achieve at least a power of 80%. Both the
+above sentences given the specifications of treatment effect, and
+significance level.
+
+# Analysis
+
+## Libraries {.omit .unlisted .unnumbered}
+
+```{r libraries, echo = F, message=FALSE, warning=FALSE}
 library(tidyverse) # Data wrangling
 library(ggplot2) # Plots
 library(viridis) # beautiful color scale
 library(estimatr) # regressions with robust Se
+library(BayesFactor)
 library(modelsummary) # For lm_robust tables
 library(rstatix) # Wilcoxon tests
 library(kableExtra) # Fancy output 
+library(lmtest) # clustered errors for glm
+library(sandwich) # clustered errors for glm
+library(pwr) # power analysis
+library(tables) # multilevel tables
+library(GGally) # Table
 ```
 
-# Read Data
-```{r read_data}
+## Data {.omit .unlisted .unnumbered}
+
+### Read {.omit .unlisted .unnumbered}
+
+```{r read_data, echo = F}
 # Main Study
 read.csv("creators_data.csv",
          sep = ";",
@@ -28,7 +181,7 @@ read.csv("creators_data.csv",
   rename(Payoff.Fee = Payoff...Fee) %>% 
   mutate(rival_main = ifelse(Treatment == "rival" & w_p_r == 2, 1,0),
          rival_supp = ifelse(Treatment == "rival" & w_p_r == 1, 1,0),
-         nonrival = ifelse(Treatment =="nonrival", 1,0),
+         nonrival = ifelse(Treatment == "nonrival", 1,0),
          participant = row_number()) %>% 
   mutate(Treat = ifelse(rival_main == 1, "Rival Main", 
                         ifelse(rival_supp == 1, "Rival Supp.", "Nonrival"))
@@ -43,118 +196,16 @@ read.csv("creators_data_perception.csv",
   filter(is.na(participant) != T) -> df_cal
 ```
 
+### Transform {.omit .unlisted .unnumbered}
 
-# Statistics
-
-## Main and Supplementary Study
-Values in the Paper:
-
-# :TODO: 1 In the paper the number of participants is reported as 210 in main study and 90 in supplementary study (page 6)
-  - Session duration: 105 min -> Not available in the data
-  - Average earnings: 60 USD 
-  
-```{r earnings}
+```{r transform_data, echo=FALSE, message=FALSE, warning=FALSE}
 df %>% 
-  summarise(Mean_Earnings = round(mean(Payoff.Fee), 0))
-```
+  mutate(participant = row_number()) %>% 
+  pivot_longer(cols = starts_with("decision_"), names_to = "round", 
+               values_to = "decision_round" ) %>% 
+  mutate(round = as.numeric(str_replace(round, "decision_", ""))) %>%   
+  filter(decision_round != "-") -> df_decision_long_stripped
 
-# :TODO: 2 The following statement it can be interpreted in two ways (page 6)
-"users earn on average more than 10 % of their monthly budget net of rent"
-    1. The mean of (earning in percent of the monthly budget)
-    2. The (mean of the earning) in percent of (the mean of the monthly budget)
-```{r}
-df %>% 
-  filter(monthly_budget != 0) %>% 
-  mutate(earnings_perc = Payoff.Fee/monthly_budget*100) %>% 
-  summarise(Mean_earnings_percentage = round(mean(earnings_perc), 1))
-
-mean(df$Payoff.Fee)/mean(df$monthly_budget)*100
-```
-
-  - Fraction female:
-    - non-rival: 0.60 (SD = 0.49)
-    - rival_main: 0.47 (SD = 0.50)
-    - rival_supp: 0.58 (SD = 0.50)
-  - Mean age:
-    - non-rival: 22 (SD = 2.7)
-    - rival_main: 22 (SD = 2.3)
-    - rival_supp: 22 (SD = 2.7)
-  - Median monthly budget: 
-    - non-rival: 400 (SD = 380)
-    - rival_main: 480 (SD = 302)
-    - rival_supp: 400 (SD = 487)
-
-```{r overview_statistics}
-df %>%
-  group_by(Treat) %>% 
-  summarise(Female_Fraction = round(1-mean(sex_d),2),
-            Gender_SD = round(sd(sex_d),2),
-            Age_mean = round(mean(age),0),
-            Age_SD = round(sd(age),1),
-            Monthly_budget_median = median(monthly_budget),
-            Monthly_budget_sd = round(sd(monthly_budget),0))
-```
-## Wilcoxon Tests: 
-
-  - rival-main vs. non-rival
-    - Gender (W = 1170, p = 0.18)
-    - Age (W = 1388, p = 0.81)
-    - Income (W = 1292, p = 0.71)
-
-  - rival-supp vs. non-rival
-    - Gender (W = 1320, p = 0.82)
-    - Age (W = 1227, p = 0.42)
-    - Income (W = 1261, p = 0.56)
-
-```{r Wilcox_gender}
-wilcox_test(sex_d~Treat, data = df,  
-            comparisons = list(c("Nonrival", "Rival Main"),
-                               c("Nonrival", "Rival Supp.")))
-```
-
-```{r Wilcox_age}
-wilcox_test(age~Treat, data = df,  
-              comparisons = list(c("Nonrival", "Rival Main"),
-                                 c("Nonrival", "Rival Supp.")))
-```
-
-```{r Wilcox_income}
-wilcox_test(monthly_budget~Treat, data = df,
-            comparisons = list(c("Nonrival", "Rival Main"),
-                               c("Nonrival", "Rival Supp.")))
-```
-
-## Calibration Study
-
-  - Mean earning: 34.70 USD
-  
-# :TODO: 3 There is a small inconsitency with the value reported in the paper (page 10 Footnote 10)
-
-```{r payoff_cal}
-df_cal %>% 
-  summarise(Mean_Earnings = round(mean(Payoff.Fee, na.rm = T), 2))
-```
-```{r payoff_cal_understanding}
-# Maybe it is the Payoff Variable
-df_cal %>% 
-  summarise(Mean_Earnings = round(mean(Payoff, na.rm = T), 2))
-# Apparently Not
-
-# Maybe it is just the sum of payoffs without any fees
-df_cal %>% 
-  filter(!is.na(Payoff)) %>% 
-  pivot_longer(cols= starts_with("payoff_"), names_to = "round", 
-               values_to = "payoff_rounds" ) %>% 
-  # Rename Rounds
-  mutate(round = as.numeric(str_replace(round, "payoff_", ""))) %>% 
-  group_by(participant) %>% 
-  summarise(sum_payoff = sum(payoff_rounds, na.rm = T)) %>% 
-  summarise(mean_payoff = mean(sum_payoff))
-# Closer but still not exactly 34.70 USD
-```
-
-# Deniability
-```{r data_prep, message=FALSE, warning=FALSE}
 df_cal %>% 
   pivot_longer(cols = starts_with("perception_"), names_to = "round", 
                values_to = "perception_round" ) %>% 
@@ -174,25 +225,177 @@ df_cal_long %>%
             ) -> df_cal_mean_per_round
 ```
 
-## Correlation
-  - 0.79 (page 10)
-```{r}
+### Define some Maps {.omit .unlisted .unnumbered}
+
+```{r maps, echo=FALSE}
+social_norms <- function(x){
+  if (x == 1){
+    return("VI")
+  } else if (x == 2){
+    return("SI")
+  } else if (x == 3){
+    return("SA")
+  } else if (x == 4){
+    return("VA")
+  }
+}
+
+round_labels <- c("Round 1", "Round 2", "Round 3", "Round 4", "Round 5", 
+"Round 6", "Round 7", "Round 8", "Round 9", "Round 10")
+
+social_app_labels <- c("Very 
+Socially 
+Inappropriate",
+"Somewhat 
+Socially 
+Inappropriate",
+"Somewhat 
+Socially 
+Appropriate",
+"Very 
+Socially 
+Appropriate")
+
+decision_labels <- c("(B) Buy",
+"(A) Do Nothing",
+"(C) Sumbit")
+```
+
+## Statistics
+
+### Share Stealing {#stat-steal}
+
+-   67%
+-   Calibration solve 32%
+
+**! Could not reproduce the values exactly !**
+
+```{r share_stealing, echo=TRUE}
+# Percent of Submit
+submit_stripped = round(mean((df_decision_long_stripped %>% mutate(steal = ifelse(decision_round=="S", 1, 0)))$steal)*100,2)
+print(submit_stripped)
+# Solved Calibration
+solved = round(mean(df_cal_long$solved_round)*100,2) 
+print(solved)
+# Difference
+print(submit_stripped - solved)
+# Share
+print((submit_stripped-solved)/submit_stripped)
+```
+
+### Main and Supplementary Study
+
+-   Session duration: 105 min -\> Not available in the data
+
+-   Average earnings: 60 USD
+
+```{r earnings}
+df %>% 
+  summarise(Mean_Earnings = mean(Payoff.Fee)) %>% 
+  round(0)
+```
+
+-   Fraction female:
+
+    -   non-rival: 0.60 (SD = 0.49)
+    -   rival_main: 0.47 (SD = 0.50)
+    -   rival_supp: 0.58 (SD = 0.50)
+
+-   Mean age:
+
+    -   non-rival: 22 (SD = 2.7)
+    -   rival_main: 22 (SD = 2.3)
+    -   rival_supp: 22 (SD = 2.7)
+
+-   Median monthly budget:
+
+    -   non-rival: 400 (SD = 380)
+    -   rival_main: 480 (SD = 302)
+    -   rival_supp: 400 (SD = 487)
+
+```{r overview_statistics}
+df %>%
+  group_by(Treat) %>% 
+  summarise(Female_Fraction = round(1-mean(sex_d),2),
+            Gender_SD = round(sd(sex_d),2),
+            Age_mean = round(mean(age),0),
+            Age_SD = round(sd(age),1),
+            Monthly_budget_median = median(monthly_budget),
+            Monthly_budget_sd = round(sd(monthly_budget),0))
+```
+
+### Wilcoxon Tests:
+
+-   rival-main vs. non-rival
+
+    -   Gender (W = 1170, p = 0.18)
+    -   Age (W = 1388, p = 0.81)
+    -   Income (W = 1292, p = 0.71)
+
+-   rival-supp vs. non-rival
+
+    -   Gender (W = 1320, p = 0.82)
+    -   Age (W = 1227, p = 0.42)
+    -   Income (W = 1261, p = 0.56)
+
+```{r Wilcox_gender}
+wilcox_test(sex_d~Treat, data = df,  
+            comparisons = list(c("Nonrival", "Rival Main"),
+                               c("Nonrival", "Rival Supp.")))
+```
+
+```{r Wilcox_age}
+wilcox_test(age~Treat, data = df,  
+              comparisons = list(c("Nonrival", "Rival Main"),
+                                 c("Nonrival", "Rival Supp.")))
+```
+
+```{r Wilcox_income}
+wilcox_test(monthly_budget~Treat, data = df,
+            comparisons = list(c("Nonrival", "Rival Main"),
+                               c("Nonrival", "Rival Supp.")))
+```
+
+### Calibration Study {#earn-cal}
+
+-   Average earnings: 34.70 USD (Footnote on page 11 new version)
+
+**! Could not reproduce the value exactly !**
+
+```{r payoff_cal, echo=TRUE}
+df_cal %>% 
+  summarise(Mean_Earnings = mean(Payoff.Fee, na.rm = T)) %>% 
+  round(2)
+```
+
+## Deniability
+
+### Correlation
+
+-   0.79 (page 10)
+
+```{r correlation_solved_perception}
 corr_solved_perception <- cor.test(x=df_cal_mean_per_round$mean_solved, 
                                    y=df_cal_mean_per_round$mean_perception)
 print(round(corr_solved_perception$estimate, 2))
 ```
-## Mean:
-  - perceived: 47%
-  - true: 32%
-  
+
+### Mean:
+
+-   perceived: 47%
+-   true: 32%
+
 ```{r deniability_stat}
 df_cal_mean_per_round %>%   
-  summarise(Mean_perception = round(mean(mean_perception, na.rm = T), 0),
-            Mean_true = round(mean(mean_solved, na.rm = T), 0))
+  summarise(Mean_perception = mean(mean_perception, na.rm = T),
+            Mean_true = mean(mean_solved, na.rm = T)) %>% 
+  round(0)
 ```
-  - Round 7:
-    - Perceived: 34%
-    - True: 0%
+
+-   Round 7:
+
+    -   Perceived: 34%
+    -   True: 0%
 
 ```{r deniabilty_r_7}
 df_cal_mean_per_round %>%  
@@ -200,26 +403,20 @@ df_cal_mean_per_round %>%
   round(0)
 ```
 
-## Figure 2
+### Figure 2
+
 ```{r fig_2}
-df_cal_mean_per_round %>% 
-  mutate(perception = mean_perception, solved = mean_solved) %>% 
-ggplot() +
-  geom_segment(aes(x=round, 
-                  xend=round, 
-                  y=solved, 
-                  yend=perception),
-                color="gray") +
-  geom_point(aes(x=round,
-                 y=solved,
-                 color="Solved",
-                 shape="Solved"), 
-              size=3) +
-  geom_point(aes(x=round, 
-                 y=perception, 
-                 color="Perception", 
-                 shape="Perception"),
-              size=3) +
+# Hmisc must be installed for this to run!
+df_cal_long %>% 
+ggplot(aes(x=round)) +
+  stat_summary(aes(y = solved_round*100, color="Solved", shape="Solved"),
+               fun = "mean", geom = "point", na.rm = T, size = 2) +
+  stat_summary(aes(y = solved_round*100, color="Solved", shape="Solved"),
+               fun.data = "mean_cl_boot", geom = "errorbar", na.rm = T, width = 0.5) +
+  stat_summary(aes(y = perception_round, color="Perception", shape="Perception"), 
+               fun = "mean", geom = "point", na.rm = T, size = 2) +
+  stat_summary(aes(y = perception_round, color="Perception", shape="Perception"),
+               fun.data = mean_cl_boot, geom = "errorbar", na.rm = T, width = 0.5) +
   scale_color_viridis_d(name="",
                         direction = -1) +
   scale_shape(name="") +
@@ -227,21 +424,13 @@ ggplot() +
   scale_y_continuous(limits=c(0,100),
                      breaks=seq(0,100,10)) +
   labs(x="Round", 
-       y="Mean in %", 
+       y="", 
        title="Percentage of True vs. Perceived Difficulty")
 ```
 
-## Figure 4
+### Figure 4
 
 ```{r fig_4}
-df %>% 
-  mutate(participant = row_number()) %>% 
-  pivot_longer(cols = starts_with("decision_"), names_to = "round", 
-               values_to = "decision_round" ) %>% 
-  mutate(round = as.numeric(str_replace(round, "decision_", ""))) %>%   
-  filter(decision_round != "-") -> df_decision_long_stripped
-
-
 ggplot() +
   geom_density(aes(x=frac_submit, fill="Submit"),
                alpha = 0.5,
@@ -270,11 +459,15 @@ ggplot() +
         legend.direction = "vertical")
 ```
 
-# Stealing: rival vs. non rival
-## Statistics
-  - Round 7
-    - Rival: 51%, SD  = 0.51
-    - Non-rival: 59%, SD  = 0.50
+## Stealing
+
+### Statistics
+
+-   Round 7
+
+    -   Rival: 51%, SD = 0.51
+    -   Non-rival: 59%, SD = 0.50
+
 ```{r steal_r_v_nr}
 df_decision_long_stripped %>% 
   filter(round == 7) %>% 
@@ -283,7 +476,9 @@ df_decision_long_stripped %>%
   summarise(Percent_steal = round(mean(submit)*100,0),
             SD_steal = round(sd(submit),2))
 ```
-## Statistical Tests
+
+### Statistical Tests
+
 ```{r steal_r_v_nr_stat_test}
 df_decision_long_stripped %>% 
   filter(round == 7) %>% 
@@ -304,9 +499,685 @@ df_decision_long_stripped %>%
               comparisons = list(c("Nonrival", "Rival Main")))
 ```
 
-# :TODO: 4 Which adjustment methods where used? not all here produce 1 as reported in the paper (page 18)
+## Adjustement for Multiple Testing
+
+### No adjustment
+
+```{r multiple_adjust_none}
+df_decision_long_stripped %>%
+  mutate(submit = ifelse(decision_round == "S", 1, 0)) %>% 
+  group_by(round) %>%
+  wilcox_test(data =., submit~Treat,
+              comparisons = list(c("Nonrival", "Rival Main"))
+              ) %>%
+  adjust_pvalue(method = "none") %>%
+  add_significance("p.adj") %>% 
+  select(round, p.adj) %>% 
+  round(3)
+```
+
+### FDR Adjustment
+
+"fdr" is the tightest method producing, the smallest p values.
+
+Still all p values are larger than 0.5 which would explain the reported
+values in the paper given the rounding.
+
+```{r multiple adjust_none}
+df_decision_long_stripped %>%
+  mutate(submit = ifelse(decision_round == "S", 1, 0)) %>% 
+  group_by(round) %>%
+  wilcox_test(data =., submit~Treat,
+              comparisons = list(c("Nonrival", "Rival Main"))
+              ) %>%
+  adjust_pvalue(method = "fdr") %>%
+  add_significance("p.adj") %>% 
+  select(round, p.adj) %>% 
+  round(3)
+```
+
+## Bayes Factors
+
+Histograms of the bootstrapped distribution can be found in the appendix
+at \@ref(bf-plots)
+
+### Data Preparation {.omit .unlisted .unnumbered}
+
+```{r bf_data_prep}
+# Read the table again with stringsAsFactors = False to not have - in the decisions
+read.csv("creators_data.csv",
+         sep = ";",
+         # To avoid having -'s in the contingency table
+         stringsAsFactors = F) %>% 
+  mutate(rival_main = ifelse(Treatment == "rival" & w_p_r == 2, 1,0),
+         rival_supp = ifelse(Treatment == "rival" & w_p_r == 1, 1,0),
+         nonrival = ifelse(Treatment =="nonrival", 1,0)) %>% 
+  mutate(Treat = ifelse(rival_main == 1, "Rival Main", 
+                        ifelse(rival_supp == 1, "Rival Supp.", "Nonrival"))) %>% 
+  pivot_longer(cols = starts_with("decision_"), names_to = "round", 
+               values_to = "decision_round" ) %>% 
+  mutate(round = as.numeric(str_replace(round, "decision_", ""))) %>% 
+  filter(decision_round != "-") -> df_bf
+```
+
+### Main Treatment
+
+```{r bf_main}
+bayes_factors = c()
+bayes_factors_names = c()
+
+for (i in seq(1,10)){
+  df_bf %>% 
+    filter(round == i,
+           Treat != "Rival Supp."
+           ) %>% 
+    mutate(submit = ifelse(decision_round == "S", 1, 0)) -> df_inter
+  bf <- contingencyTableBF(table(df_inter$submit, df_inter$Treat), 
+                           sampleType = "indepMulti", 
+                           fixedMargin = "cols")
+  bayes_factors_names = c(bayes_factors_names, paste(i, sep = ""))
+  bayes_factors = c(bayes_factors, as.vector(t(bf)))
+}
+```
+
+```{r bf_main_plot}
+names(bayes_factors) <- bayes_factors_names
+barplot(bayes_factors, xlab = "Round", main = "Bayes Factors in Favor of the Null Hypothesis")
+```
+
+```{r bf_main_values}
+# Bayes Factors in favor of the null hypothesis
+round(bayes_factors, 2)
+```
+
+### Supplementary Treatment {#bf-supp}
+
+```{r bf_supp}
+bayes_factors_supp = c()
+bayes_factors_names_supp = c()
+
+for (i in seq(1,10)){
+  df_bf %>% 
+    filter(round == i,
+           Treat != "Rival Main"
+           ) %>% 
+    mutate(submit = ifelse(decision_round == "S", 1, 0)) -> df_inter
+  bf <- contingencyTableBF(table(df_inter$submit, df_inter$Treat), 
+                           sampleType = "indepMulti", 
+                           fixedMargin = "cols")
+  bayes_factors_names_supp = c(bayes_factors_names_supp, paste(i, sep = ""))
+  bayes_factors_supp = c(bayes_factors_supp, as.vector(t(bf)))
+}
+```
+
+```{r bf_supp_plot}
+names(bayes_factors_supp) <- bayes_factors_names_supp
+barplot(bayes_factors_supp, xlab = "Round", main = "Bayes Factors in Favor of the Null Hypothesis")
+```
+
+```{r bf_supp_values}
+# Bayes Factors in favor of the null hypothesis
+round(bayes_factors_supp, 2)
+```
+
+## Power of the study
+
+```{r power}
+pwr.2p2n.test(h = ES.h(0.65, 0.35), # worst case for 0.3 difference in proportions 
+              sig.level = 0.05,
+              n1 = 50,
+              #n2 = 37,
+              power = 0.8)
+```
+
+## Figure 5 (Behavior rival vs. non-rival)
+
+```{r fig_5, fig.dim=c(8,10), message=FALSE, warning=FALSE}
+df_decision_long_stripped %>% 
+  pivot_wider(names_from = decision_round, 
+              values_from = decision_round, 
+              values_fill = 0,
+              values_fn = function(x){return(1)}) %>% 
+  pivot_longer(cols = c("S", "B", "N"),
+               names_to = "Decision",
+               values_to = "Decision_dummy") %>% 
+  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
+                           labels = decision_labels),
+         round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                        labels = round_labels)) %>% 
+  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
+                        labels = c("Nonrival Treatment", "Rival Treatment", 
+                            "Supplementary Treatment"))) %>% 
+  filter(Treat != "Supplementary Treatment") %>% 
+ggplot(aes(x=Treat, y=Decision_dummy, fill=Decision)) +
+  facet_wrap(~round, ncol = 2,
+             strip.position = "bottom") +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               position = position_dodge2(width = 0.5, padding = 0.5)) +
+  ylim(0, 1) +
+  scale_fill_viridis_d(name = "") +
+  theme(legend.position = "top") +
+  labs(x = "",
+       y= "Fraction of Users")
+```
+
+## Table (A1 and B2)
+
+```{r table, message=FALSE, warning=FALSE}
+ci <- function(x, n){
+  ci = round(prop.test(x, n)$conf.int*100)
+  return(paste("[", ci[1], ", ", ci[2], "]", sep=""))
+}
+  
+df_decision_long_stripped %>% 
+  pivot_wider(names_from = decision_round, 
+              values_from = decision_round, 
+              values_fill = 0,
+              values_fn = function(x){return(1)}) %>% 
+  pivot_longer(cols = c("S", "B", "N"),
+               names_to = "Decision",
+               values_to = "Decision_dummy") %>% 
+  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
+                           labels = c("A", "B", "C")),
+          round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                         labels = round_labels)) %>% 
+  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
+                        labels = c("Nonrival Treatment", "Rival Treatment", 
+                            "Supplementary Treatment"))) %>% 
+  pivot_wider(names_from = Decision, values_from = Decision_dummy) %>% 
+  group_by(round, Treat) %>% 
+  summarise(A_count = sum(A), B_count = sum(B), C_count = sum(C), A = round(mean(A)*100), B = round(mean(B)*100), C = round(mean(C)*100), N = n()) %>% 
+  ungroup() %>% 
+  rowwise()%>%
+  mutate(ci_A = ci(A_count, N), ci_B = ci(B_count, N), ci_C = ci(C_count, N)) %>% 
+  mutate(A = paste(A, ci_A, sep = "\n"), B = paste(B, ci_B, sep = "\n"), C = paste(C, ci_C, sep = "\n")) %>% 
+  group_by(Treat) %>% 
+  select(round, A, B, C, N) -> df_table
+```
+
+```{r print_table}
+df_table %>% 
+  filter(Treat == "Rival Treatment") -> df_table_combined
+
+df_table %>% 
+  filter(Treat == "Nonrival Treatment") %>% 
+  left_join(df_table_combined, by = c("round")) -> df_table_combined
+
+df_table %>% 
+  filter(Treat == "Supplementary Treatment") %>% 
+  left_join(df_table_combined, by = c("round")) -> df_table_combined
+
+df_table_combined %>% 
+  ungroup() %>% 
+  select(round, A, B, C, N, A.x, B.x, C.x, N.x, A.y, B.y, C.y, N.y) %>% 
+  kable(col.names=c("Round", "A (Do. N)","B (Buy)","C (Submit)", "N", "A (Do. N)","B (Buy)","C (Submit)", "N", "A (Do. N)","B (Buy)","C (Submit)", "N")) %>% 
+  add_header_above(c(" " = 1, "Supplementary" = 4, "Nonrival" = 4, "Rival" = 4)) %>% 
+  add_header_above(c(" " = 1, "Treatment" = 12)) %>% 
+  kable_material(c("striped", "hover"))
+```
+
+## Figure B.1 (Behavior supplementary vs. non-rival)
+
+```{r fig_b1, fig.dim=c(8,10), message=FALSE, warning=FALSE}
+df_decision_long_stripped %>% 
+  pivot_wider(names_from = decision_round, 
+              values_from = decision_round, 
+              values_fill = 0,
+              values_fn = function(x){return(1)}) %>% 
+  pivot_longer(cols = c("S", "B", "N"),
+               names_to = "Decision",
+               values_to = "Decision_dummy") %>% 
+  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
+                           labels = decision_labels),
+         round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                        labels = round_labels)) %>% 
+  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
+                        labels = c("Nonrival Treatment", "Rival Treatment", 
+                             "Supplementary Treatment"))) %>% 
+  filter(Treat != "Rival Treatment") %>% 
+ggplot(aes(x=Treat, y=Decision_dummy, fill=Decision)) +
+  facet_wrap(~round, ncol = 2,
+             strip.position = "bottom") +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               position = position_dodge2(width = 0.5, padding = 0.5)) +
+  ylim(0, 1) +
+  scale_fill_viridis_d(name = "") +
+  theme(legend.position = "top") +
+  labs(x = "",
+       y= "Fraction of Users")
+```
+
+## Social Norms
+
+### Statistics
+
+-   Submit:
+
+    -   Rival: 1.60 (SD = 0.75)
+    -   Non-rival: 1.50 (SD = 0.65)
+
+-   Buy:
+
+    -   Rival: 3.60 (SD = 0.65)
+    -   Non-rival: 3.77 (SD = 0.43)
+
+-   Do Nothing:
+
+    -   Rival: 2.78 (SD = 0.82)
+    -   Non-rival: 2.48 (SD = 0.83)
+
+```{r soc_norms}
+df %>% 
+  group_by(Treat) %>% 
+  summarise(Mean_submit = round(mean(KW_C), 2),
+            Sd_submit = round(sd(KW_C), 2),
+            Mean_buy = round(mean(KW_B), 2),
+            Sd_buy = round(sd(KW_B), 2),
+            Mean_nothing = round(mean(KW_A), 2),
+            Sd_nothing = round(sd(KW_A), 2)) 
+```
+
+```{r soc_norms_wilcox}
+wilcox_test(KW_C~Treat, data = df,  
+            comparisons = list(c("Nonrival", "Rival Main")))
+```
+
+```{r soc_norms_t_test}
+t_test(KW_C~Treat, data = df,  
+            comparisons = list(c("Nonrival", "Rival Main")))
+```
+
+### Figure 6
+
+```{r fig_6}
+df %>% 
+  rename(C = KW_C, B = KW_B, A = KW_A) %>%
+  mutate(A = sapply(A, social_norms),
+         B = sapply(B, social_norms),
+         C = sapply(C, social_norms)) %>% 
+  pivot_longer(cols = c("A", "B", "C"), 
+               names_to = "Decision", 
+               values_to = "Social_acc") %>%
+  pivot_wider(names_from = "Social_acc", 
+              values_from = "Social_acc", 
+              values_fill = 0, 
+              values_fn = function(x){return(1)}) %>% 
+  pivot_longer(cols = c("VA", "SA", "SI", "VI"), 
+               names_to = "Appropriatness",
+               values_to = "Appropriatness_dummy") %>%
+  mutate(Decision = factor(Decision, levels = c("A", "B", "C"),
+                           labels = decision_labels )) %>% 
+  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
+                        labels = c("Nonrival Treatment", "Rival Treatment", 
+                            "Supplementary Treatment"))) %>% 
+  mutate(Appropriatness = factor(Appropriatness, levels = c("VI", "SI", "SA", "VA"),
+                                 labels = social_app_labels)) %>% 
+  filter(Treat != "Supplementary Treatment", Decision == "(C) Sumbit") %>% 
+ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               position = position_dodge2(width = 0.5, padding = 0.5)) +
+  scale_fill_viridis_d(name = "") +
+  ylim(0, 1) +
+  labs(x="", y = "Fraction of Users") +
+  theme(legend.position = "top")
+```
+
+### All Decision Rival Main
+
+```{r fig_a2 , fig.dim=c(8,10)}
+df %>% 
+  rename(C = KW_C, B = KW_B, A = KW_A) %>%
+  mutate(A = sapply(A, social_norms),
+         B = sapply(B, social_norms),
+         C = sapply(C, social_norms)) %>% 
+  pivot_longer(cols = c("A", "B", "C"), 
+               names_to = "Decision", 
+               values_to = "Social_acc") %>%
+  pivot_wider(names_from = "Social_acc", 
+              values_from = "Social_acc", 
+              values_fill = 0, 
+              values_fn = function(x){return(1)}) %>% 
+  pivot_longer(cols = c("VA", "SA", "SI", "VI"), 
+               names_to = "Appropriatness",
+               values_to = "Appropriatness_dummy") %>%
+  mutate(Decision = factor(Decision, levels = c("A", "B", "C"),
+                           labels = decision_labels )) %>% 
+  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
+                        labels = c("Nonrival Treatment", "Rival Treatment", 
+                            "Supplementary Treatment"))) %>% 
+  mutate(Appropriatness = factor(Appropriatness, levels = c("VI", "SI", "SA", "VA"),
+                                 labels = social_app_labels)) %>% 
+  filter(Treat != "Supplementary Treatment") %>% 
+ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
+  facet_wrap(~Decision, ncol = 1, strip.position = "bottom") +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               position = position_dodge2(width = 0.5, padding = 0.5)) +
+  scale_fill_viridis_d(name = "") +
+  ylim(0, 1) +
+  labs(x="", y = "Fraction of Users") +
+  theme(legend.position = "top")
+```
+
+### All Decisions Rival Supplementary
+
+```{r fig_b2, fig.dim=c(8,10)}
+df %>% 
+  rename(C = KW_C, B = KW_B, A = KW_A) %>%
+  mutate(A = sapply(A, social_norms),
+         B = sapply(B, social_norms),
+         C = sapply(C, social_norms)) %>% 
+  pivot_longer(cols = c("A", "B", "C"), 
+               names_to = "Decision", 
+               values_to = "Social_acc") %>%
+  pivot_wider(names_from = "Social_acc", 
+              values_from = "Social_acc", 
+              values_fill = 0, 
+              values_fn = function(x){return(1)}) %>% 
+  pivot_longer(cols = c("VA", "SA", "SI", "VI"), 
+               names_to = "Appropriatness",
+               values_to = "Appropriatness_dummy") %>%
+  mutate(Decision = factor(Decision, levels = c("A", "B", "C"),
+                           labels = decision_labels )) %>% 
+  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
+                        labels = c("Nonrival Treatment", "Rival Treatment", 
+                            "Supplementary Treatment"))) %>% 
+  mutate(Appropriatness = factor(Appropriatness, levels = c("VI", "SI", "SA", "VA"),
+                                 labels = social_app_labels)) %>% 
+  filter(Treat != "Rival Treatment") %>% 
+ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
+  facet_wrap(~Decision, ncol = 1, strip.position = "bottom") +
+  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", 
+               position = position_dodge2(width = 0.5, padding = 0.5)) +
+  scale_fill_viridis_d(name = "") +
+  ylim(0, 1) +
+  labs(x="", y = "Fraction of Users") +
+  theme(legend.position = "top")
+```
+
+## Dictator Game {#dict-game}
+
+-   User keep average: 1.39
+-   Percent of users who share: 77%
+
+**! Could not reproduce the values exactly !**
+
+```{r echo=TRUE}
+# ALL
+df %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2 ) %>% 
+  round(3)
+
+df%>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Percent_give_smtn = mean(Dictator_give_smtn))
+```
+
+## Regression
+
+### Data Prep {.omit .unlisted .unnumbered}
+
+```{r lm_prep}
+df %>% 
+  mutate(participant = row_number()) %>% 
+  pivot_longer(cols = starts_with("short_"), names_to = "round", 
+               values_to = "short_round" ) %>% 
+  mutate(round = as.numeric(str_replace(round, "short_", ""))) %>% 
+  group_by(participant) %>% 
+  summarise(scrabble_ability = sum(short_round)) %>% 
+  right_join(df_decision_long_stripped)  %>% 
+  mutate(submit = ifelse(decision_round == "S", 1, 0), 
+         nationality = ifelse(national == "Switzerland", "Swiss", "nonswiss"),
+         uni = ifelse(University == "ETHZ", "ETHZ", 
+                  ifelse(University == "UZH" | University == "PH" | University == "andere", "other",
+                  ifelse(University == "nicht", "non_student", NA))),
+         field = ifelse(STEM == 1, "STEM",
+                    ifelse(Law == 1, "Law", 
+                      ifelse(Study_field == "no_field", "no_field", 
+                        ifelse(STEM != 1 & Law != 1 & Study_field != "no_field", "other", NA)))),
+         dictator_sharing = 2-dictator_kept) %>% 
+  mutate(field = relevel(as.factor(field), ref = "STEM"), 
+         nationality = relevel(as.factor(nationality), ref = "Swiss")) -> df_lm
+```
+
+### Styling {.omit .unlisted .unnumbered}
+
+```{r lm_style}
+coef_map =c("TreatRival Main"="Rival Treatment",
+             "TreatRival Supp." = "Suppleme. Rival Treatment", 
+             "sex_d" = "Male", 
+             "age" = "Age",
+             "nationalitynonswiss" = "Non-Swiss",
+             "monthly_budget" = "Monthly Budget",
+             "uniother" = "Non-ETH Student",
+             "fieldLaw" = "Law Student",
+             "scrabble_ability" = "Scrabble Ability", 
+             "dictator_sharing" = "Dictator Sharing", 
+             "KW_C" = "Social Appropriateness")
+
+gm_map <- list(
+  list("raw" = "nobs", "clean" = "Observations", "fmt" = 0),
+  list("raw" = "r.squared", "clean" = "R²", "fmt" = 3),
+  list("raw" = "adj.r.squared", "clean" = "Adjusted R²", "fmt" = 3))
+```
+
+### Linear Regresssion
+
+```{r lm_compute}
+models_lr <- list()
+
+models_lr[["(1)"]] <- lm_robust(
+  submit ~ Treat,
+  clusters = participant,
+  data = df_lm,
+  se_type = "stata")
+
+models_lr[["(2)"]] <- lm_robust(
+  submit ~ Treat + sex_d + age +  nationality,
+  clusters = participant,
+  data = df_lm,
+  se_type = "stata")
+
+models_lr[["(3)"]] <- lm_robust(
+  submit ~ Treat + sex_d + age +  nationality + monthly_budget + uni + field + scrabble_ability + dictator_sharing + KW_C,
+  clusters = participant,
+  data = df_lm,
+  se_type = "CR0")
+
+rows <- tribble(~term,             ~first,  ~sec, ~th,
+                'Residual Std. Error',   paste(
+    as.character(round(sqrt(models_lr[["(1)"]]$res_var),3)), "(df = ",
+    as.character(round(models_lr[["(1)"]]$df.residual,3)) ,")" ) ,   
+                paste(
+    as.character(round(sqrt(models_lr[["(2)"]]$res_var),3)), "(df = ",
+    as.character(round(models_lr[["(2)"]]$df.residual,3)) ,")" ), 
+                paste(
+    as.character(round(sqrt(models_lr[["(3)"]]$res_var),3)), "(df = ",
+    as.character(round(models_lr[["(3)"]]$df.residual,3)) ,")" ))
+```
+
+```{r lm_print}
+modelsummary(
+  models_lr, 
+  fmt = 3,
+  stars = T, 
+  coef_map = coef_map,
+  estimate = "{estimate}({std.error}){stars}",
+  statistic = NA,
+  notes = "+ p < 0.1, * p < 0.05, ** p < 0.01, *** p < 0.001",
+  gof_map = gm_map,
+  add_rows = rows,
+  conf_level = .95) %>% add_header_above(c(" " = 1, "Submit" = 3),) %>% 
+  add_header_above(c(" " = 1, "Dependent variable:" = 3), bold = T, italic = T) 
+```
+
+### Logistic Regression
+
+```{r log_compute}
+models_logit <- list()
+
+models_logit[["(1)"]] <- glm(
+  submit ~ Treat,
+  family = "binomial",
+  data = df_lm)
+
+
+models_logit[["(2)"]] <- glm(
+  submit ~ Treat + sex_d + age,
+  family = "binomial",
+  data = df_lm)
+
+models_logit[["(3)"]] <- glm(
+  submit ~ Treat + sex_d + age +  nationality + monthly_budget + uni + field + scrabble_ability + dictator_sharing + KW_C,
+  family = "binomial",
+  data = df_lm)
+```
+
+```{r log_print}
+gm_map_logit <- list(
+  list("raw" = "nobs", "clean" = "Observations", "fmt" = 0),
+  list("raw" = "AIC", "clean" = "Akaike Inf. Crit.", "fmt" = 3),
+  list("raw" = "logLik", "clean" = "Log Likelihood", "fmt" = 3))
+
+modelsummary(
+  models_logit, 
+  fmt = 3,
+  stars = T, 
+  coef_map = append(coef_map, c("")),
+  estimate = "{estimate} ({std.error}){stars}",
+  statistic = NULL,
+   notes = "+ p < 0.1, * p < 0.05, ** p < 0.01, *** p < 0.001",
+  gof_map = gm_map_logit,
+  vcov = ~participant,
+  conf_level = .95) %>% add_header_above(c(" " = 1, "Submit" = 3),) %>% 
+  add_header_above(c(" " = 1, "Dependent variable:" = 3), bold = T, italic = T) 
+```
+
+# Appendix
+
+## Payoff Calibration Study {#payoff-cal}
+
+Trying to understand where the difference comes from
+
+Reported Value: 34.7 USD
+
+```{r payoff_cal_understanding, echo=TRUE}
+# Maybe it is the Payoff Variable
+df_cal %>% 
+  summarise(Mean_Earnings = mean(Payoff, na.rm = T)) %>% 
+  round(2)
+# Apparently Not
+
+# Maybe it is just the sum of payoffs without any fees
+df_cal %>% 
+  filter(!is.na(Payoff)) %>% 
+  pivot_longer(cols= starts_with("payoff_"), names_to = "round", 
+               values_to = "payoff_rounds" ) %>% 
+  group_by(participant) %>% 
+  summarise(sum_payoff = sum(payoff_rounds, na.rm = F)) %>% 
+  summarise(mean_payoff = mean(sum_payoff, na.rm = F)) %>% 
+  round(2)
+# Closer but still not exactly 34.70 USD
+```
+
+## Dictator Sharing {#dict-share-understand}
+
+Trying to understand the discrepancy by trying all different subsets.
+
+Cannot reproduce the reported values:
+
+-   User keep average: 1.39
+
+-   Percent of users who share: 77%
+
+```{r echo=TRUE}
+# Only Main and Non-rival
+df %>% 
+  filter(Treat != "Rival Supp.") %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn) ) %>% 
+  round(2)
+```
+
+```{r echo="TRUE"}
+# Only Supplementary rival treatment
+df %>% 
+  filter(Treat == "Rival Supp.") %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn) ) %>% 
+  round(2)
+```
+
+```{r echo=TRUE}
+# Only Main and Non-rival
+df %>% 
+  filter(Treat != "Nonrival") %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn) ) %>% 
+  round(2)
+```
+
+```{r echo=TRUE}
+df_decision_long_stripped %>% 
+  group_by(round) %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn)) %>% 
+  summarise(mean(Mean_keep), mean(Percent_keep), mean(Percent_give_smtn)) %>% 
+  round(2)
+```
+
+```{r echo=TRUE}
+# Only Main and Non-rival
+df %>% 
+  filter(Treat == "Nonrival") %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn) ) %>% 
+  round(2)
+```
+
+```{r echo=TRUE}
+# Only the main round
+df %>% 
+  filter(w_p_r == 2) %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn)) %>% 
+  round(2)
+```
+
+```{r echo=TRUE}
+# Only the supplementary 
+df %>% 
+  filter(w_p_r == 1) %>% 
+  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn)) %>% 
+  round(2)
+```
+
+## Multiple Testing {#mult-test}
+
+The results for all methods
+
 ```{r wilcoxon_all_rounds}
-for (adj_method in c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr")){
+for (adj_method in c("holm", "hochberg", "hommel", "bonferroni", "BY", "fdr", "none")){
   print(paste("Method: ", adj_method))
   print(
     df_decision_long_stripped %>%
@@ -322,517 +1193,48 @@ for (adj_method in c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fd
 }
 ```
 
-# :TODO: 5 Bayesian Factor Analysis
+## Bayes Factor Bootstrapped Distribution Plots {#bf-plots}
 
-# :TODO: 6 Power of the study
+### Main
 
-## Figure 5 (Behavior rival vs. non-rival)
-
-# :TODO: 7 In case you want to uses these figures I have to add the number of observations 
-```{r fig.dim=c(8,10), message=FALSE, warning=FALSE}
-df_decision_long_stripped %>% 
-  pivot_wider(names_from = decision_round, 
-              values_from = decision_round, 
-              values_fill = 0,
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("S", "B", "N"),
-               names_to = "Decision",
-               values_to = "Decision_dummy") %>% 
-  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
-                           labels = c("(A) Do Nothing",
-                                      "(B) Buy",
-                                      "(C) Sumbit")),
-         round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                        labels = c("Round 1", "Round 2", "Round 3", "Round 4", 
-                                   "Round 5", "Round 6", "Round 7", "Round 8", 
-                                   "Round 9", "Round 10"))) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  filter(Treat != "Supplementary Treatment") %>% 
-ggplot(aes(x=Treat, y=Decision_dummy, fill=Decision)) +
-  facet_wrap(~round, ncol = 2,
-             strip.position = "bottom") +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  ylim(0, 1) +
-  scale_fill_viridis_d(name = "") +
-  theme(legend.position = "top") +
-  labs(x = "",
-       y= "Fraction of Users")
-```
-
-### Version 2
-```{r}
-df_decision_long_stripped %>% 
-  pivot_wider(names_from = decision_round, 
-              values_from = decision_round, 
-              values_fill = 0,
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("S", "B", "N"),
-               names_to = "Decision",
-               values_to = "Decision_dummy") %>% 
-  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
-                           labels = c("(A) Do Nothing",
-                                      "(B) Buy",
-                                      "(C) Sumbit")),
-         round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                        labels = c("Round 1", "Round 2", "Round 3", "Round 4", 
-                                   "Round 5", "Round 6", "Round 7", "Round 8", 
-                                   "Round 9", "Round 10"))) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  filter(Treat != "Supplementary Treatment") %>% 
-  filter(Decision != "(A) Do Nothing") %>% 
-ggplot(aes(x=round, y=Decision_dummy, fill=Treat)) +
-  facet_wrap(~Decision, ncol = 1,
-             strip.position = "bottom") +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  stat_summary(fun = "mean", aes(color = "True", y=mean_solved/100, x = round), 
-               inherit.aes = F, geom = "crossbar",
-               data =  df_cal_mean_per_round %>% 
-                 mutate(Decision = "S") %>%
-                 mutate(Decision = factor(Decision, levels= c("S", "B", "N"),
-                           labels = c("(C) Sumbit", 
-                                      "(B) Buy",
-                                      "(A) Do Nothing")))) +
-  ylim(0, 1) +
-  scale_fill_viridis_d(name = "") +
-  scale_color_viridis_d(name="", 
-                        breaks = c("True"),
-                        labels = c("True Deniability"), 
-                        begin = 0.5) +
-  theme(legend.position = "top") +
-  labs(x = "",
-       y= "Fraction of Users")
-```
-
-## Figure B.1 (Behavior supplementary vs. non-rival)
-```{r fig.dim=c(8,10), message=FALSE, warning=FALSE}
-df_decision_long_stripped %>% 
-  pivot_wider(names_from = decision_round, 
-              values_from = decision_round, 
-              values_fill = 0,
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("S", "B", "N"),
-               names_to = "Decision",
-               values_to = "Decision_dummy") %>% 
-  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
-                           labels = c("(A) Do Nothing",
-                                      "(B) Buy",
-                                      "(C) Sumbit")),
-         round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                        labels = c("Round 1", "Round 2", "Round 3", "Round 4", 
-                                   "Round 5", "Round 6", "Round 7", "Round 8", 
-                                   "Round 9", "Round 10"))) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  filter(Treat != "Rival Treatment") %>% 
-ggplot(aes(x=Treat, y=Decision_dummy, fill=Decision)) +
-  facet_wrap(~round, ncol = 2,
-             strip.position = "bottom") +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  ylim(0, 1) +
-  scale_fill_viridis_d(name = "") +
-  theme(legend.position = "top") +
-  labs(x = "",
-       y= "Fraction of Users")
-```
-
-### Version 2
-```{r}
-df_decision_long_stripped %>% 
-  pivot_wider(names_from = decision_round, 
-              values_from = decision_round, 
-              values_fill = 0,
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("S", "B", "N"),
-               names_to = "Decision",
-               values_to = "Decision_dummy") %>% 
-  mutate(Decision = factor(Decision, levels = c("N", "B", "S"),
-                           labels = c("(A) Do Nothing",
-                                      "(B) Buy",
-                                      "(C) Sumbit")),
-         round = factor(round, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                        labels = c("Round 1", "Round 2", "Round 3", "Round 4", 
-                                   "Round 5", "Round 6", "Round 7", "Round 8", 
-                                   "Round 9", "Round 10"))) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  filter(Treat != "Rival Treatment") %>% 
-  filter(Decision != "(A) Do Nothing") %>% 
-ggplot(aes(x=round, y=Decision_dummy, fill=Treat)) +
-  facet_wrap(~Decision, ncol = 1,
-             strip.position = "bottom") +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  stat_summary(fun.data = mean_se, aes(color = "True", y=mean_solved/100, x = round), 
-               inherit.aes = F, geom = "crossbar",
-               data =  df_cal_mean_per_round %>% 
-                 mutate(Decision = "S") %>%
-                 mutate(Decision = factor(Decision, levels= c("S", "B", "N"),
-                           labels = c("(C) Sumbit", 
-                                      "(B) Buy",
-                                      "(A) Do Nothing")))) +
-  ylim(0, 1) +
-  scale_fill_viridis_d(name = "") +
-  scale_color_viridis_d(name="", 
-                        breaks = c("True"),
-                        labels = c("True Deniability"), 
-                        begin = 0.5) +
-  theme(legend.position = "top") +
-  labs(x = "",
-       y= "Fraction of Users")
-```
-
-
-# Social Norms
-
-## Statistics
-  - Submit:
-    - Rival: 1.60 (SD = 0.75)
-    - Non-rival: 1.50 (SD = 0.65)
-  - Buy:
-    - Rival: 3.60 (SD = 0.65)
-    - Non-rival: 3.77 (SD = 0.43)
-  - Do Nothing:
-    - Rival: 2.78 (SD = 0.82)
-    - Non-rival: 2.48 (SD = 0.83)
-
-```{r}
-df %>% 
-  group_by(Treat) %>% 
-  summarise(Mean_submit = mean(KW_C),
-            Sd_submit = sd(KW_C),
-            Mean_buy = mean(KW_B),
-            Sd_buy = sd(KW_B),
-            Mean_nothing = mean(KW_A),
-            Sd_nothing = sd(KW_A))
-```
-
-```{r}
-wilcox_test(KW_C~Treat, data = df,  
-            comparisons = list(c("Nonrival", "Rival Main")))
-```
-
-```{r}
-t_test(KW_C~Treat, data = df,  
-            comparisons = list(c("Nonrival", "Rival Main")))
-```
-
-## Figure 6
-```{r}
-social_norms <- function(x){
-  if (x == 1){
-    return("VI")
-  } else if (x == 2){
-    return("SI")
-  } else if (x == 3){
-    return("SA")
-  } else if (x == 4){
-    return("VA")
-  }
+```{r bf_main_plots}
+for (i in seq(1,10)){
+  df_bf %>% 
+    filter(round == i,
+           Treat != "Rival Supp."
+           ) %>% 
+    mutate(submit = ifelse(decision_round == "S", 1, 0)) -> df_inter
+  bf <- contingencyTableBF(table(df_inter$submit, df_inter$Treat), 
+                           sampleType = "indepMulti", 
+                           fixedMargin = "cols")
+  chains = posterior(bf, iterations = 10000)
+  submitGivenNonrival = chains[,"pi[2,1]"] / chains[,"pi[*,1]"]
+  submitGivenRival = chains[,"pi[2,2]"] / chains[,"pi[*,2]"]
+  hist(submitGivenNonrival - submitGivenRival, xlab = "Probability increase",
+    main = paste("Round: ", i,"\nIncrease in probability (Nonrival - Rival Main) of choosing Submit", sep = "") ,
+    freq=FALSE, yaxt='n')
+  box()
 }
-
-df %>% 
-  rename(C = KW_C, B = KW_B, A = KW_A) %>%
-  mutate(A = sapply(A, social_norms),
-         B = sapply(B, social_norms),
-         C = sapply(C, social_norms)) %>% 
-  pivot_longer(cols = c("A", "B", "C"), 
-               names_to = "Decision", 
-               values_to = "Social_acc") %>%
-  pivot_wider(names_from = "Social_acc", 
-              values_from = "Social_acc", 
-              values_fill = 0, 
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("VA", "SA", "SI", "VI"), 
-               names_to = "Appropriatness",
-               values_to = "Appropriatness_dummy") %>%
-  mutate(Decision = factor(Decision, levels = c("A", "B", "C"),
-                           labels = c("(B) Buy",
-                                      "(A) Do Nothing",
-                                      "(C) Sumbit") )) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  mutate(Appropriatness = factor(Appropriatness, levels = c("VI", "SI", "SA", "VA"),
-                                 labels = c("Very 
-Socially 
-Inappropriate",
-"Somewhat 
-Socially 
-Inappropriate",
-"Somewhat 
-Socially 
-Appropriate",
-"Very 
-Socially 
-Appropriate"))) %>% 
-  filter(Treat != "Supplementary Treatment", Decision == "(C) Sumbit") %>% 
-ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  scale_fill_viridis_d(name = "") +
-  ylim(0, 1) +
-  labs(x="", y = "Fraction of Users") +
-  theme(legend.position = "top")
 ```
 
-### All Decision Rival Main
-```{r, fig.dim=c(8,10)}
-social_norms <- function(x){
-  if (x == 1){
-    return("VI")
-  } else if (x == 2){
-    return("SI")
-  } else if (x == 3){
-    return("SA")
-  } else if (x == 4){
-    return("VA")
-  }
+### Supplementary
+
+```{r bf_supp_plots}
+for (i in seq(1,10)){
+  df_bf %>% 
+    filter(round == i,
+           Treat != "Rival Main"
+           ) %>% 
+    mutate(submit = ifelse(decision_round == "S", 1, 0)) -> df_inter
+  bf <- contingencyTableBF(table(df_inter$submit, df_inter$Treat), 
+                           sampleType = "indepMulti", 
+                           fixedMargin = "cols")
+  chains = posterior(bf, iterations = 10000)
+  submitGivenNonrival = chains[,"pi[2,1]"] / chains[,"pi[*,1]"]
+  submitGivenRival = chains[,"pi[2,2]"] / chains[,"pi[*,2]"]
+  hist(submitGivenNonrival - submitGivenRival, xlab = "Probability increase",
+    main = paste("Round: ", i,"\nIncrease in probability (Nonrival - Rival Supp.) of choosing Submit", sep = "") ,
+    freq=FALSE, yaxt='n')
+  box()
 }
-
-df %>% 
-  rename(C = KW_C, B = KW_B, A = KW_A) %>%
-  mutate(A = sapply(A, social_norms),
-         B = sapply(B, social_norms),
-         C = sapply(C, social_norms)) %>% 
-  pivot_longer(cols = c("A", "B", "C"), 
-               names_to = "Decision", 
-               values_to = "Social_acc") %>%
-  pivot_wider(names_from = "Social_acc", 
-              values_from = "Social_acc", 
-              values_fill = 0, 
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("VA", "SA", "SI", "VI"), 
-               names_to = "Appropriatness",
-               values_to = "Appropriatness_dummy") %>%
-  mutate(Decision = factor(Decision, levels = c("A", "B", "C"),
-                           labels = c("(A) Do Nothing",
-                                      "(B) Buy",
-                                      "(C) Sumbit") )) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  mutate(Appropriatness = factor(Appropriatness, levels = c("VI", "SI", "SA", "VA"),
-                                 labels = c("Very 
-Socially 
-Inappropriate",
-"Somewhat 
-Socially 
-Inappropriate",
-"Somewhat 
-Socially 
-Appropriate",
-"Very 
-Socially 
-Appropriate"))) %>% 
-  filter(Treat != "Supplementary Treatment") %>% 
-ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
-  facet_wrap(~Decision, ncol = 1, strip.position = "bottom") +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  scale_fill_viridis_d(name = "") +
-  ylim(0, 1) +
-  labs(x="", y = "Fraction of Users") +
-  theme(legend.position = "top")
-```
-
-### All Decisions Rival Supplementary
-```{r, fig.dim=c(8,10)}
-df %>% 
-  rename(C = KW_C, B = KW_B, A = KW_A) %>%
-  mutate(A = sapply(A, social_norms),
-         B = sapply(B, social_norms),
-         C = sapply(C, social_norms)) %>% 
-  pivot_longer(cols = c("A", "B", "C"), 
-               names_to = "Decision", 
-               values_to = "Social_acc") %>%
-  pivot_wider(names_from = "Social_acc", 
-              values_from = "Social_acc", 
-              values_fill = 0, 
-              values_fn = function(x){return(1)}) %>% 
-  pivot_longer(cols = c("VA", "SA", "SI", "VI"), 
-               names_to = "Appropriatness",
-               values_to = "Appropriatness_dummy") %>%
-  mutate(Decision = factor(Decision, levels = c("A", "B", "C"),
-                           labels = c("(A) Do Nothing",
-                                      "(B) Buy",
-                                      "(C) Sumbit") )) %>% 
-  mutate(Treat = factor(Treat, levels = c("Nonrival", "Rival Main", "Rival Supp."),
-                        labels = c("Nonrival Treatment", "Rival Treatment", 
-                            "Supplementary Treatment"))) %>% 
-  mutate(Appropriatness = factor(Appropriatness, levels = c("VI", "SI", "SA", "VA"),
-                                 labels = c("Very 
-Socially 
-Inappropriate",
-"Somewhat 
-Socially 
-Inappropriate",
-"Somewhat 
-Socially 
-Appropriate",
-"Very 
-Socially 
-Appropriate"))) %>% 
-  filter(Treat != "Rival Treatment") %>% 
-ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
-  facet_wrap(~Decision, ncol = 1, strip.position = "bottom") +
-  stat_summary(fun = "mean", geom = "bar", position = "dodge2") +
-  stat_summary(fun.data = mean_se, geom = "errorbar", 
-               position = position_dodge2(width = 0.5, padding = 0.5)) +
-  scale_fill_viridis_d(name = "") +
-  ylim(0, 1) +
-  labs(x="", y = "Fraction of Users") +
-  theme(legend.position = "top")
-```
-
-# Dictator Game
-
-User keep: 1.39 
-
-# :TODO: 8 I get different values (page 22)
-
-```{r}
-df %>% 
-  summarise(Mean_keep = mean(dictator_kept), 
-            Percent_keep = mean(dictator_kept)/2 ) %>% 
-  round(2)
-
-df %>% 
-  filter(Treat != "Rival Supp.") %>% 
-  summarise(Mean_keep = mean(dictator_kept), 
-            Percent_keep = mean(dictator_kept)/2 ) %>% 
-  round(2)
-```
-Percent of users who share: 77%
-
-# :TODO: 9 I get a different value (page 22)
-
-```{r}
-df %>% 
-  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
-  summarise(Percent_give_smtn = mean(Dictator_give_smtn))
-```
-
-```{r}
-df %>% 
-  filter(Treat != "Rival Supp.") %>% 
-  mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
-  summarise(Percent_give_smtn = mean(Dictator_give_smtn))
-```
-
-# Linear Regression
-
-## Data Prep
-```{r}
-df %>% 
-  mutate(participant = row_number()) %>% 
-  pivot_longer(cols = starts_with("short_"), names_to = "round", 
-               values_to = "short_round" ) %>% 
-  mutate(round = as.numeric(str_replace(round, "short_", ""))) %>% 
-  group_by(participant) %>% 
-  summarise(scrabble_ability = sum(short_round)) %>% 
-  right_join(df_decision_long_stripped)  %>% 
-  mutate(submit = ifelse(decision_round == "S", 1, 0), 
-         Treatment = ifelse(Treatment=="rival", 1, 0), 
-         non_swiss = ifelse(national == "Switzerland", 0, 1),
-         non_eth = ifelse(University == "ETHZ", 0, 1),
-         no_field = ifelse(Study_field == "no_field", 1, 0),
-         non_student = ifelse(University == "nicht", 1, 0),
-         stem = ifelse(STEM == 1, 1, 0),
-         law_stud = ifelse(Law == 1, 1, 0),
-         dictator_sharing = 2-dictator_kept) -> df_lm
-```
-
-Styling
-```{r}
-coef_map = c("rival_main"="Rival Treatment",
-             "rival_supp" = "Supplementary Treatment", 
-             "sex_d" = "Male", 
-             "age" = "Age",
-             "non_swiss" = "Non-Swiss",
-             "monthly_budget" = "Monthly_Budget",
-             "non_eth" = "Non-ETH Student",
-             "law_stud" = "Law Student",
-             "scrabble_ability" = "Scrabble Ability", 
-             "dictator_sharing" = "Dictator Sharing", 
-             "KW_C" = "Social Appropriateness")
-
-gm_map <- list(
-  list("raw" = "nobs", "clean" = "Observations", "fmt" = 0),
-  list("raw" = "r.squared", "clean" = "R²", "fmt" = 3),
-  list("raw" = "adj.r.squared", "clean" = "Adjusted R²", "fmt" = 3))
-```
-
-```{r}
-models_lr <- list()
-
-models_lr[["(1)"]] <- lm_robust(
-  submit ~ rival_main + rival_supp,
-  clusters = participant,
-  data = df_lm,
-  se_type = "stata")
-
-models_lr[["(2)"]] <- lm_robust(
-  submit ~ rival_main + rival_supp + sex_d + age +  non_swiss ,
-  clusters = participant,
-  data = df_lm,
-  se_type = "stata")
-
-models_lr[["(3)"]] <- lm_robust(
-  submit ~ rival_main + rival_supp + sex_d + age +  non_swiss + monthly_budget + 
-    non_eth + law_stud + scrabble_ability + dictator_sharing + KW_C + no_field +
-    non_student + stem,
-  clusters = participant,
-  data = df_lm,
-  se_type = "stata")
-
-rows <- tribble(~term,             ~first,  ~sec, ~th,
-                'Residual Std. Error',   paste(
-    as.character(round(sqrt(models_lr[["(1)"]]$res_var),3)), "(df = ",
-    as.character(round(models_lr[["(1)"]]$df.residual,3)) ,")" ) ,   
-                paste(
-    as.character(round(sqrt(models_lr[["(2)"]]$res_var),3)), "(df = ",
-    as.character(round(models_lr[["(2)"]]$df.residual,3)) ,")" ), 
-                paste(
-    as.character(round(sqrt(models_lr[["(3)"]]$res_var),3)), "(df = ",
-    as.character(round(models_lr[["(3)"]]$df.residual,3)) ,")" ))
-```
-
-# :TODO: 10 I get a different coefficient for Law the rest is equal (page 34)
-```{r}
-modelsummary(
-  models_lr, 
-  fmt = 3,
-  stars = T, 
-  coef_map = coef_map,
-  estimate = "{estimate} ({std.error}){stars}",
-  statistic = NULL, 
-  gof_map = gm_map,
-  add_rows = rows,
-  conf_level = .95) %>% add_header_above(c(" " = 1, "Submit" = 3),) %>% 
-  add_header_above(c(" " = 1, "Dependent variable:" = 3), bold = T, italic = T) 
-```
-
-
-# Page 13
-## Footnote 11:
-```{r}
-df_decision_long_stripped %>% 
-  group_by(decision_round) %>% 
-  summarise(count = n(), 
-            percent = round(n()/nrow(df_decision_long_stripped)*100,1) )
 ```
