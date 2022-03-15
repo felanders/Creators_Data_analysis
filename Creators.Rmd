@@ -2,10 +2,12 @@
 title: "Creators Statistical Analysis"
 author: "Andreas Felderer"
 output:
-  html_document:
+  pdf_document:
     toc: yes
-    toc_depth: '2'
+    latex_engine: xelatex
     df_print: paged
+    includes:
+      in_header: preamble.tex
   bookdown::html_document2:
     toc: yes
     toc_depth: 2
@@ -16,12 +18,6 @@ output:
     theme: paper
     css: style.css
   pdf: default
-  pdf_document:
-    toc: yes
-    latex_engine: xelatex
-    df_print: paged
-    includes:
-      in_header: preamble.tex
 editor_options:
   markdown:
     wrap: 72
@@ -417,7 +413,7 @@ df_cal_mean_per_round %>%
 ### Figure 2
 
 ```{r fig_2}
-# Hmisc must be installed for this to run!
+#the  Hmisc package must be installed for this to run!
 df_cal_long %>% 
 ggplot(aes(x=round)) +
   stat_summary(aes(y = solved_round*100, color="Solved", shape="Solved"),
@@ -490,19 +486,41 @@ df_decision_long_stripped %>%
 
 ### Statistical Tests
 
-```{r steal_r_v_nr_stat_test}
+**t Test**
+
+-    t(94) = 0.8
+
+-   p = 0.41
+
+```{r steal_t_test}
 df_decision_long_stripped %>% 
   filter(round == 7) %>% 
   mutate(submit = ifelse(decision_round == "S", 1, 0)) %>% 
   t_test(submit~Treat, 
          comparisons = list(c("Nonrival", "Rival Main")))
+```
 
+**Wilcoxon Test**
+
+-   W = 1437
+
+-   p = 0.41
+
+```{r steal_w_test}
 df_decision_long_stripped %>% 
   filter(round == 7) %>% 
   mutate(submit = ifelse(decision_round == "S", 1, 0)) %>% 
   wilcox_test(submit~Treat,  
               comparisons = list(c("Nonrival", "Rival Main")))
+```
 
+**Wilcoxon Test (one-sided)**
+
+-   W = 1437
+
+-   p = 0.20
+
+```{r steal_w_test_onesided}
 df_decision_long_stripped %>% 
   filter(round == 7) %>% 
   mutate(submit = ifelse(decision_round == "S", 1, 0)) %>% 
@@ -720,6 +738,7 @@ df_table %>%
 ```
 
 ## Table B2
+
 ```{r print_table_b2}
 df_table %>% 
   filter(Treat == "Supplementary Treatment") %>%
@@ -731,7 +750,6 @@ df_table %>%
   add_header_above(c(" " = 1, "Treatment" = 8)) %>% 
   kable_material(c("striped", "hover"))
 ```
-
 
 ## Figure B.1 (Behavior supplementary vs. non-rival)
 
@@ -795,10 +813,22 @@ df %>%
             Sd_nothing = round(sd(KW_A), 2)) 
 ```
 
+**Wilcoxon Test**
+
+-   W = 1273
+
+-   p = 0.57
+
 ```{r soc_norms_wilcox}
 wilcox_test(KW_C~Treat, data = df,  
             comparisons = list(c("Nonrival", "Rival Main")))
 ```
+
+**t Test**
+
+-   t(87) = −0.7
+
+-   p = 0.48
 
 ```{r soc_norms_t_test}
 t_test(KW_C~Treat, data = df,  
@@ -925,13 +955,11 @@ ggplot(aes(x=Appropriatness, y=Appropriatness_dummy, fill= Treat)) +
 ```{r echo=TRUE}
 # ALL
 df %>% 
-  summarise(Mean_keep = mean(dictator_kept), 
-            Percent_keep = mean(dictator_kept)/2 ) %>% 
-  round(3)
-
-df%>% 
   mutate(Dictator_give_smtn = ifelse(dictator_kept != 2, 1, 0)) %>% 
-  summarise(Percent_give_smtn = mean(Dictator_give_smtn))
+  summarise(Mean_keep = mean(dictator_kept), 
+            Percent_keep = mean(dictator_kept)/2,
+            Percent_give_smtn = mean(Dictator_give_smtn)) %>% 
+  round(2)
 ```
 
 ## Regression
